@@ -66,6 +66,12 @@ public class RouteInfoManager {
     private final HashMap<String/* clusterName */, Set<String/* brokerName */>> clusterAddrTable;
     // 用于管理跟broker之间的长连接，是否还有心跳、保活
     private final HashMap<String/* brokerAddr */, BrokerLiveInfo> brokerLiveTable;
+    // filter server是什么东西，rocketmq高阶的功能，我们可以基于tag来进行数据的筛选，比较简单，没办法支持更加复杂细粒度的数据筛选
+    // rocketmq是支持一个高阶功能，叫做filter server，在每台broker机器上是可以启动一个filter server
+    // filter server 启动之后会跟本地的broker来进行长连接构建，注册，以及心跳和保活
+    // 我们可以把一个自定义的消息筛选的class，一个类上传到filter server里去，我们消费数据的时候，让broker
+    // 把数据先传输到本地机器的filter server里去，filter server基于你自定义的class来进行细粒度的数据筛选
+    // 把精细筛选后的数据在回传给你的消费端
     private final HashMap<String/* brokerAddr */, List<String>/* Filter Server */> filterServerTable;
 
     public RouteInfoManager() {
@@ -76,6 +82,10 @@ public class RouteInfoManager {
         this.filterServerTable = new HashMap<String, List<String>>(256);
     }
 
+    /**
+     * 返回的是完整的broker cluster 数据。cluster-》broker组-》broker机器
+     * @return
+     */
     public byte[] getAllClusterInfo() {
         ClusterInfo clusterInfoSerializeWrapper = new ClusterInfo();
         clusterInfoSerializeWrapper.setBrokerAddrTable(this.brokerAddrTable);
@@ -83,6 +93,10 @@ public class RouteInfoManager {
         return clusterInfoSerializeWrapper.encode();
     }
 
+    /**
+     * 删除一个topic所有的队列信息
+     * @param topic
+     */
     public void deleteTopic(final String topic) {
         try {
             try {
@@ -96,6 +110,10 @@ public class RouteInfoManager {
         }
     }
 
+    /**
+     * 查询所有的topic队列数据
+     * @return
+     */
     public byte[] getAllTopicList() {
         TopicList topicList = new TopicList();
         try {
@@ -113,19 +131,23 @@ public class RouteInfoManager {
     }
 
     public RegisterBrokerResult registerBroker(
-        final String clusterName,
-        final String brokerAddr,
-        final String brokerName,
-        final long brokerId,
-        final String haServerAddr,
+        final String clusterName,  // broker所属cluster的名称
+        final String brokerAddr,   // broker地址信息
+        final String brokerName,   // broker名称
+        final long brokerId,       // brokerId信息
+        final String haServerAddr, // 与当前broker机器做高可用的机器地址
+        // 当前的这个broker机器上面包含的topic队列数据
         final TopicConfigSerializeWrapper topicConfigWrapper,
+        // broker机器上面部署的filter server列表
         final List<String> filterServerList,
+        // 物理上的netty channel网络长连接
         final Channel channel) {
         RegisterBrokerResult result = new RegisterBrokerResult();
         try {
             try {
                 this.lock.writeLock().lockInterruptibly();
-
+                // 拿到一个cluster集群对应的broker组，把我们的这个broker组加入到cluster里去
+                // 因为会注册多次， 所以是set
                 Set<String> brokerNames = this.clusterAddrTable.get(clusterName);
                 if (null == brokerNames) {
                     brokerNames = new HashSet<String>();
@@ -134,16 +156,19 @@ public class RouteInfoManager {
                 brokerNames.add(brokerName);
 
                 boolean registerFirst = false;
-
+                // 从broker组拿到这个broker，如果没拿到就是第一次注册，初始化一份broker组数据
                 BrokerData brokerData = this.brokerAddrTable.get(brokerName);
                 if (null == brokerData) {
                     registerFirst = true;
                     brokerData = new BrokerData(clusterName, brokerName, new HashMap<Long, String>());
                     this.brokerAddrTable.put(brokerName, brokerData);
                 }
+                // 拿到broker组数据里的小map，broker组里的broker机器map
                 Map<Long, String> brokerAddrsMap = brokerData.getBrokerAddrs();
                 //Switch slave to master: first remove <1, IP:PORT> in namesrv, then add <0, IP:PORT>
                 //The same IP:PORT must only have one record in brokerAddrTable
+                // 这个地方处理一些异常数据，如果说注册过来的broker机器地址跟之前注册过的机器地址是一样的
+                // 但是broker id是不同的，同一台机器，你启动了不同的broker节点（用的是不同的broker.conf），清理掉异常数据
                 Iterator<Entry<Long, String>> it = brokerAddrsMap.entrySet().iterator();
                 while (it.hasNext()) {
                     Entry<Long, String> item = it.next();
@@ -151,10 +176,12 @@ public class RouteInfoManager {
                         it.remove();
                     }
                 }
-
+                // 把本次要注册的broker地址放到了broker组对应的broker机器的地址列表里去
                 String oldAddr = brokerData.getBrokerAddrs().put(brokerId, brokerAddr);
                 registerFirst = registerFirst || (null == oldAddr);
 
+                // 如果说你是一组broker中的master，而且你上报了你管理的topic的数据
+                // 处理broker组管理的topic的队列数据，会更新到内存map里去
                 if (null != topicConfigWrapper
                     && MixAll.MASTER_ID == brokerId) {
                     if (this.isBrokerTopicConfigChanged(brokerAddr, topicConfigWrapper.getDataVersion())
@@ -168,7 +195,7 @@ public class RouteInfoManager {
                         }
                     }
                 }
-
+                // 维护跟broker之间的保活数据
                 BrokerLiveInfo prevBrokerLiveInfo = this.brokerLiveTable.put(brokerAddr,
                     new BrokerLiveInfo(
                         System.currentTimeMillis(),
@@ -178,7 +205,7 @@ public class RouteInfoManager {
                 if (null == prevBrokerLiveInfo) {
                     log.info("new broker registered, {} HAServer: {}", brokerAddr, haServerAddr);
                 }
-
+                // 维护broker机器上filter server地址
                 if (filterServerList != null) {
                     if (filterServerList.isEmpty()) {
                         this.filterServerTable.remove(brokerAddr);
@@ -186,13 +213,18 @@ public class RouteInfoManager {
                         this.filterServerTable.put(brokerAddr, filterServerList);
                     }
                 }
-
+                // 如果说注册过来的机器是一组broker里的slave
                 if (MixAll.MASTER_ID != brokerId) {
                     String masterAddr = brokerData.getBrokerAddrs().get(MixAll.MASTER_ID);
+                    // 这一组broker中master节点存在
                     if (masterAddr != null) {
+                        // 拿到master节点的保活信息
                         BrokerLiveInfo brokerLiveInfo = this.brokerLiveTable.get(masterAddr);
                         if (brokerLiveInfo != null) {
+                            // 他会在你的一组broker里的slave broker来注册的时候
+                            // 给你的注册结果里设置进去的ha server addr，是你的这一组broker里master他的ha server addr
                             result.setHaServerAddr(brokerLiveInfo.getHaServerAddr());
+                            // 这一组broker里的master地址设置进去，并返回给你
                             result.setMasterAddr(masterAddr);
                         }
                     }
@@ -220,6 +252,9 @@ public class RouteInfoManager {
         return null;
     }
 
+
+    // 如果说你要是broker可以定期向你的nameserver进行心跳的话，每次心跳都会更新一下
+    // broker保活数据的时间戳
     public void updateBrokerInfoUpdateTimestamp(final String brokerAddr) {
         BrokerLiveInfo prev = this.brokerLiveTable.get(brokerAddr);
         if (prev != null) {
@@ -227,6 +262,7 @@ public class RouteInfoManager {
         }
     }
 
+    // 维护topic在各个broker里的队列数据
     private void createAndUpdateQueueData(final String brokerName, final TopicConfig topicConfig) {
         QueueData queueData = new QueueData();
         queueData.setBrokerName(brokerName);
@@ -253,6 +289,7 @@ public class RouteInfoManager {
                     } else {
                         log.info("topic changed, {} OLD: {} NEW: {}", topicConfig.getTopicName(), qd,
                             queueData);
+                        // 不一样，旧的删掉，下面添加新的
                         it.remove();
                     }
                 }
@@ -263,7 +300,8 @@ public class RouteInfoManager {
             }
         }
     }
-
+    // 传入进来一个broker name，broker组
+    // 只能大致先给大家看到，这个perm是broker对每个topic的权限设置，读、写、继承可以做一个设置
     public int wipeWritePermOfBrokerByLock(final String brokerName) {
         return operateWritePermOfBrokerByLock(brokerName, RequestCode.WIPE_WRITE_PERM_OF_BROKER);
     }
@@ -313,6 +351,7 @@ public class RouteInfoManager {
         return topicCnt;
     }
 
+    // 下线broker （集群-》broker组 -》 broker机器）
     public void unregisterBroker(
         final String clusterName,
         final String brokerAddr,
@@ -396,6 +435,8 @@ public class RouteInfoManager {
         }
     }
 
+    // 获取我们一个topic路由数据，生产消息和消费消息的时候，设置的都是nameserver地址，都是从nameserver获取到路由信息
+    // 针对一个topic里的多个queues，来进行路由，我这次数据要写入到哪个queue里去，这个queue在哪个broker组里
     public TopicRouteData pickupTopicRouteData(final String topic) {
         TopicRouteData topicRouteData = new TopicRouteData();
         boolean foundQueueData = false;
@@ -410,18 +451,21 @@ public class RouteInfoManager {
         try {
             try {
                 this.lock.readLock().lockInterruptibly();
+                // 首先获取这个topic对应的Queues
                 List<QueueData> queueDataList = this.topicQueueTable.get(topic);
                 if (queueDataList != null) {
                     topicRouteData.setQueueDatas(queueDataList);
                     foundQueueData = true;
 
                     Iterator<QueueData> it = queueDataList.iterator();
+                    // 遍历queues，放入到brokerNameSet中
                     while (it.hasNext()) {
                         QueueData qd = it.next();
                         brokerNameSet.add(qd.getBrokerName());
                     }
 
                     for (String brokerName : brokerNameSet) {
+                        // 拿到broker信息，clone brokerData，放入响应体中
                         BrokerData brokerData = this.brokerAddrTable.get(brokerName);
                         if (null != brokerData) {
                             BrokerData brokerDataClone = new BrokerData(brokerData.getCluster(), brokerData.getBrokerName(), (HashMap<Long, String>) brokerData
@@ -451,6 +495,8 @@ public class RouteInfoManager {
         return null;
     }
 
+    // broker定时保活扫描，如果说你的broker机器跟nameserver之间超过2分钟没有通信
+    // 等于说关闭掉跟你的物理网络连接，以及清理掉内存数据结构里关于这个broker机器的数据
     public void scanNotActiveBroker() {
         Iterator<Entry<String, BrokerLiveInfo>> it = this.brokerLiveTable.entrySet().iterator();
         while (it.hasNext()) {

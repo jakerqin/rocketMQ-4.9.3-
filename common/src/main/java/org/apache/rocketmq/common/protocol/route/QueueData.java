@@ -36,7 +36,9 @@ public class QueueData implements Comparable<QueueData> {
     // 8个read queue，读取数据，有4个queue持续消费到最新的数据，另外4个queue不会写入新数据，但是会把他已有的数据全部消费完毕
     // 把8个read queue -> 4个read queue
     private int writeQueueNums;
+    // 针对这些queue的权限（有读权限还是有写权限还是都有）
     private int perm;
+    // 标识是否为系统层面的topic
     private int topicSysFlag;
 
     public int getReadQueueNums() {

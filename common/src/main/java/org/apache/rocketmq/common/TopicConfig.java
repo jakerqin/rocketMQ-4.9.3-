@@ -20,8 +20,10 @@ import org.apache.rocketmq.common.constant.PermName;
 
 public class TopicConfig {
     private static final String SEPARATOR = " ";
+    // 默认的topic是有16个read queue和write queue
     public static int defaultReadQueueNums = 16;
     public static int defaultWriteQueueNums = 16;
+    // 当前你的broker会告诉你的nameserver，我这里放了哪些topic队列
     private String topicName;
     private int readQueueNums = defaultReadQueueNums;
     private int writeQueueNums = defaultWriteQueueNums;
