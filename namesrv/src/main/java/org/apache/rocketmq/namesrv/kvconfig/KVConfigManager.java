@@ -28,12 +28,18 @@ import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.common.protocol.body.KVTable;
 import org.apache.rocketmq.namesrv.NamesrvController;
+
+/**
+ * 以命名空间为组织的单位来管理的，往命名空间里添加kv，用非线程安全的hashmap和锁机制来保证线程安全
+ */
 public class KVConfigManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
 
     private final NamesrvController namesrvController;
-
+    // jdk的读写锁
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
+    // 基于内存中的hashmap数据结构来进行kv配置的存放
+    // 每个namespace命名空间都会有多个kv配置，是这样的一个map结构
     private final HashMap<String/* Namespace */, HashMap<String/* Key */, String/* Value */>> configTable =
         new HashMap<String, HashMap<String, String>>();
 
@@ -44,11 +50,13 @@ public class KVConfigManager {
     public void load() {
         String content = null;
         try {
+            // kv config path文件里存放的是json格式的一个大字符串，包含了所有的kv配置
             content = MixAll.file2String(this.namesrvController.getNamesrvConfig().getKvConfigPath());
         } catch (IOException e) {
             log.warn("Load KV config table exception", e);
         }
         if (content != null) {
+            // 他会基于json序列化格式进行反序列化，从json格式转为hashmap的格式
             KVConfigSerializeWrapper kvConfigSerializeWrapper =
                 KVConfigSerializeWrapper.fromJson(content, KVConfigSerializeWrapper.class);
             if (null != kvConfigSerializeWrapper) {
@@ -60,6 +68,10 @@ public class KVConfigManager {
 
     public void putKVConfig(final String namespace, final String key, final String value) {
         try {
+            // 对非线程安全的hashmap读写进行线程安全控制，使用读写锁，这个搞法不太好，
+            // 锁的粒度太粗了，一个大map有很多namespace的配置数据在里面，就一把读写锁
+            // 如果对不同的namespace的配置数据进行读写操作，加的锁是一把锁，粒度太粗了，线程并发性能不会太高
+            // 比较正确的一个做法是，使用细粒度的锁，每个namespace对应一把锁，或者是concurrentHashMap，对一批namespace进行加锁
             this.lock.writeLock().lockInterruptibly();
             try {
                 HashMap<String, String> kvTable = this.configTable.get(namespace);
@@ -83,12 +95,14 @@ public class KVConfigManager {
         } catch (InterruptedException e) {
             log.error("putKVConfig InterruptedException", e);
         }
-
+        // 持久化动作
         this.persist();
     }
 
     public void persist() {
         try {
+            // 加读锁，此时不能加写锁了，但是还能加读锁--即可以同时多线程读
+            // 持久化的动作本身就是一个读的动作在里面，读取内存里的数据写入到磁盘里去
             this.lock.readLock().lockInterruptibly();
             try {
                 KVConfigSerializeWrapper kvConfigSerializeWrapper = new KVConfigSerializeWrapper();

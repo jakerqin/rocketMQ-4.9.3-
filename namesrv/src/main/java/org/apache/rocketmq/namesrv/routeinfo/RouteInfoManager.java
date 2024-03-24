@@ -46,13 +46,25 @@ import org.apache.rocketmq.common.protocol.route.TopicRouteData;
 import org.apache.rocketmq.common.sysflag.TopicSysFlag;
 import org.apache.rocketmq.remoting.common.RemotingUtil;
 
+/**
+ * 路由数据管理组件
+ * nameserver里面最核心的路由数据管理组件
+ */
 public class RouteInfoManager {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.NAMESRV_LOGGER_NAME);
+    // broker网络长连接空闲过期时间
     private final static long BROKER_CHANNEL_EXPIRED_TIME = 1000 * 60 * 2;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
+
+    // 创建topic以后，每个topic是逻辑上的概念，都是有多个queue，这些queue分散在不同的broker组里
+    // topic -> queues
     private final HashMap<String/* topic */, List<QueueData>> topicQueueTable;
+    // 一个broker name 对应一个broker data, 代表的是一个broker组，一个broker data 应该是包含了一组broker数据
     private final HashMap<String/* brokerName */, BrokerData> brokerAddrTable;
+    // 一个nameserver是可以管理多个broker cluster，通常来说就一个cluster就可以了
+    // 多业务，对于大型的公司来说，他可能是有多个业务的，每个业务可以部署独立的broker集群，对应的都是一个nameserver
     private final HashMap<String/* clusterName */, Set<String/* brokerName */>> clusterAddrTable;
+    // 用于管理跟broker之间的长连接，是否还有心跳、保活
     private final HashMap<String/* brokerAddr */, BrokerLiveInfo> brokerLiveTable;
     private final HashMap<String/* brokerAddr */, List<String>/* Filter Server */> filterServerTable;
 
@@ -766,9 +778,13 @@ public class RouteInfoManager {
 }
 
 class BrokerLiveInfo {
+    // broker是可以主动给nameserver上报心跳，每次上报都可以更新时间戳
     private long lastUpdateTimestamp;
+    // broker数据版本号
     private DataVersion dataVersion;
+    // netty channel，网络链接，长连接的概念
     private Channel channel;
+    // 跟你当前这个broker机器构成HA高可用的broker地址
     private String haServerAddr;
 
     public BrokerLiveInfo(long lastUpdateTimestamp, DataVersion dataVersion, Channel channel,

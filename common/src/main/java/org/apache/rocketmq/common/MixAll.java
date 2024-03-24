@@ -139,19 +139,21 @@ public class MixAll {
     }
 
     public static void string2File(final String str, final String fileName) throws IOException {
-
+        // 磁盘持优化做的比较巧妙一些，先往kv config path临时文件里写入
         String tmpFile = fileName + ".tmp";
         string2FileNotSafe(str, tmpFile);
-
+        // 旧内容写入到.bak备份文件里去
         String bakFile = fileName + ".bak";
+        // 拿出旧内容
         String prevContent = file2String(fileName);
         if (prevContent != null) {
+            // 把旧内容写到.bak文件里去
             string2FileNotSafe(prevContent, bakFile);
         }
-
+        // 删掉旧内容
         File file = new File(fileName);
         file.delete();
-
+        // .tmp改名为config中的名称
         file = new File(tmpFile);
         file.renameTo(new File(fileName));
     }

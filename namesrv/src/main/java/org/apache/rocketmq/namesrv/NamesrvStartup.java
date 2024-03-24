@@ -80,6 +80,7 @@ public class NamesrvStartup {
         }
 
         final NamesrvConfig namesrvConfig = new NamesrvConfig();
+        // rocketmq 底层网络通信使用的是netty来做的
         final NettyServerConfig nettyServerConfig = new NettyServerConfig();
         nettyServerConfig.setListenPort(9876);
         if (commandLine.hasOption('c')) {
