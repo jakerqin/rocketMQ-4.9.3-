@@ -56,6 +56,7 @@ public class RemotingCommand {
     private static volatile int configVersion = -1;
     private static AtomicInteger requestId = new AtomicInteger(0);
 
+    // 序列化类型 默认json
     private static SerializeType serializeTypeConfigInThisServer = SerializeType.JSON;
 
     static {
@@ -69,9 +70,12 @@ public class RemotingCommand {
         }
     }
 
+    // 请求编号
     private int code;
+    // 编程语言
     private LanguageCode language = LanguageCode.JAVA;
     private int version = 0;
+    // 请求id
     private int opaque = requestId.getAndIncrement();
     private int flag = 0;
     private String remark;

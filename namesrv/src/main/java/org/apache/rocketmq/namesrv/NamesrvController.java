@@ -55,6 +55,7 @@ public class NamesrvController {
     // 路由管理组件
     private final RouteInfoManager routeInfoManager;
 
+    // 远程网络通信服务器，跟broker、producer、consumer进行网络通信
     private RemotingServer remotingServer;
 
     private BrokerHousekeepingService brokerHousekeepingService;
