@@ -45,6 +45,7 @@ public class BrokerHousekeepingService implements ChannelEventListener {
         this.namesrvController.getRouteInfoManager().onChannelDestroy(remoteAddr, channel);
     }
 
+    // 空闲，网络也进行清理
     @Override
     public void onChannelIdle(String remoteAddr, Channel channel) {
         this.namesrvController.getRouteInfoManager().onChannelDestroy(remoteAddr, channel);

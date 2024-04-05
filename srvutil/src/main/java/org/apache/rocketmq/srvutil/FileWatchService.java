@@ -36,10 +36,15 @@ import org.apache.rocketmq.logging.InternalLoggerFactory;
 public class FileWatchService extends ServiceThread {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.COMMON_LOGGER_NAME);
 
+    // 它这个线程要观察的文件有哪些
     private final List<String> watchFiles;
+    //文件当前的一些hash值
     private final List<String> fileCurrentHash;
+    // 文件变动监听器
     private final Listener listener;
+    // 隔多少时间对文件进行一个watch观察
     private static final int WATCH_INTERVAL = 500;
+    // 消息摘要
     private MessageDigest md = MessageDigest.getInstance("MD5");
 
     public FileWatchService(final String[] watchFiles,
@@ -49,6 +54,7 @@ public class FileWatchService extends ServiceThread {
         this.fileCurrentHash = new ArrayList<>();
 
         for (int i = 0; i < watchFiles.length; i++) {
+            // 文件不为空，且文件真实存在
             if (StringUtils.isNotEmpty(watchFiles[i]) && new File(watchFiles[i]).exists()) {
                 this.watchFiles.add(watchFiles[i]);
                 this.fileCurrentHash.add(hash(watchFiles[i]));
@@ -77,8 +83,11 @@ public class FileWatchService extends ServiceThread {
                         log.warn(this.getServiceName() + " service has exception when calculate the file hash. ", ignored);
                         continue;
                     }
+                    // hash值不一样，说明发生变化
                     if (!newHash.equals(fileCurrentHash.get(i))) {
+                        // 更新hash值
                         fileCurrentHash.set(i, newHash);
+                        // 回调监听器
                         listener.onChanged(watchFiles.get(i));
                     }
                 }
@@ -89,6 +98,13 @@ public class FileWatchService extends ServiceThread {
         log.info(this.getServiceName() + " service end");
     }
 
+    /**
+     * 拿到文件内容字节，根据摘要算法算出hash
+     * @param filePath
+     * @return
+     * @throws IOException
+     * @throws NoSuchAlgorithmException
+     */
     private String hash(String filePath) throws IOException, NoSuchAlgorithmException {
         Path path = Paths.get(filePath);
         md.update(Files.readAllBytes(path));

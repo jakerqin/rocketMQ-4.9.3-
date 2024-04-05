@@ -22,15 +22,21 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 
+// 实现自Runnable
 public abstract class ServiceThread implements Runnable {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.COMMON_LOGGER_NAME);
 
     private static final long JOIN_TIME = 90 * 1000;
 
+    // 线程任务 -》 关联的是一个线程类Thread
     private Thread thread;
+    // count down latch是用于进行多线程并发控制的
     protected final CountDownLatch2 waitPoint = new CountDownLatch2(1);
+    // 是否已经通知过了
     protected volatile AtomicBoolean hasNotified = new AtomicBoolean(false);
+    // 是否已经停止了
     protected volatile boolean stopped = false;
+    // 是否是后台运行线程
     protected boolean isDaemon = false;
 
     //Make it able to restart the thread

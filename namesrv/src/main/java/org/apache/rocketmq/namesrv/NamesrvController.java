@@ -56,13 +56,20 @@ public class NamesrvController {
     private final RouteInfoManager routeInfoManager;
 
     // 远程网络通信服务器，跟broker、producer、consumer进行网络通信
+    // 内部基于netty启动一个网络服务器，同时可以注册一些请求处理组件，可以通过它
+    // 对client/broker发起一个rpc调用，同步、异步、oneway
     private RemotingServer remotingServer;
 
+    // houseKeeping--酒店旅游行业的术语，类似于酒店房间管理，内务管理
+    // 对broker进行管理的组件
+    // nameserver跟broker之间的网络时间监听的组件
     private BrokerHousekeepingService brokerHousekeepingService;
 
+    // 网络通信线程池
     private ExecutorService remotingExecutor;
-
+    // rocketmq里面通用配置
     private Configuration configuration;
+    // 观察文件变动的组件
     private FileWatchService fileWatchService;
 
     public NamesrvController(NamesrvConfig namesrvConfig, NettyServerConfig nettyServerConfig) {
