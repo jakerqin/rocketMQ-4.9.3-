@@ -71,6 +71,7 @@ public abstract class NettyRemotingAbstract {
 
     /**
      * This map caches all on-going requests.
+     * 通过这个remoting server发送出去的所有请求都会缓存在我的responseTable里，等待请求响应
      */
     protected final ConcurrentMap<Integer /* opaque */, ResponseFuture> responseTable =
         new ConcurrentHashMap<Integer, ResponseFuture>(256);
@@ -78,12 +79,14 @@ public abstract class NettyRemotingAbstract {
     /**
      * This container holds all processors per request code, aka, for each incoming request, we may look up the
      * responding processor in this map to handle the request.
+     * 存储有各请求的请求处理
      */
     protected final HashMap<Integer/* request code */, Pair<NettyRequestProcessor, ExecutorService>> processorTable =
         new HashMap<Integer, Pair<NettyRequestProcessor, ExecutorService>>(64);
 
     /**
      * Executor to feed netty events to user defined {@link ChannelEventListener}.
+     * netty 网络事件处理器，是一个线程
      */
     protected final NettyEventExecutor nettyEventExecutor = new NettyEventExecutor();
 
@@ -94,11 +97,13 @@ public abstract class NettyRemotingAbstract {
 
     /**
      * SSL context via which to create {@link SslHandler}.
+     * 他是用于进行安全网络通信加密，netty内嵌的ssl/tls安全加密通信组件，通过他可以生成ssl handler
      */
     protected volatile SslContext sslContext;
 
     /**
      * custom rpc hooks
+     * 针对我们的rpc的调用可以设置一些回调钩子，比如说收到rpc调用，或者是发起rpc调用，可以去调用我们的钩子
      */
     protected List<RPCHook> rpcHooks = new ArrayList<RPCHook>();
 
@@ -145,6 +150,9 @@ public abstract class NettyRemotingAbstract {
      * <li>A response to a previous request issued by this very participant.</li>
      * </ul>
      * </p>
+     * 如果说broker主动对我的nameserver发起一个rpc调用请求，rpc调用和响应都是RemotingCommand
+     * netty server会反序列化rpc调用请求，从字节数组搞成RemotingCommand，就会把这个rpc请求交给这个方法
+     * 来进行rpc请求处理，也有可能是nameserver发送了一个rpc请求给broker，broker返回的是rpc响应，我收到的也可能是响应
      *
      * @param ctx Channel handler context.
      * @param msg incoming remoting command.

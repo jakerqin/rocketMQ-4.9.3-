@@ -290,6 +290,11 @@ public class MixAll {
         return properties;
     }
 
+    /**
+     * 对象转成properties
+     * @param object
+     * @return
+     */
     public static Properties object2Properties(final Object object) {
         Properties properties = new Properties();
 

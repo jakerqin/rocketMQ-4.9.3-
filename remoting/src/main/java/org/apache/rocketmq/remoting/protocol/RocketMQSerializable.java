@@ -27,6 +27,10 @@ public class RocketMQSerializable {
     private static final Charset CHARSET_UTF8 = Charset.forName("UTF-8");
 
     public static byte[] rocketMQProtocolEncode(RemotingCommand cmd) {
+        // 用json进行序列化其实是省力做法，效率是比较差的，序列化以后的数据格式是比较占用空间的
+        // 常规做法是自己对RemotingCommand协议数据对象进行编码
+
+
         // String remark
         byte[] remarkBytes = null;
         int remarkLen = 0;

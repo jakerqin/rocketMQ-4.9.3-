@@ -96,9 +96,14 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
 
     public NettyRemotingServer(final NettyServerConfig nettyServerConfig,
         final ChannelEventListener channelEventListener) {
+        // remoting server一个是接受rpc调用请求，可以通过它发起rpc请求--同步/异步/oneway
+        // oneway semaphore是否是跟我们的netty server oneway调用请求是有关系的
+        // 搞出来两个semaphore信号量。猜想：可能说是用来限制通过remoting server调用oneway和async rpc的调用数量
         super(nettyServerConfig.getServerOnewaySemaphoreValue(), nettyServerConfig.getServerAsyncSemaphoreValue());
+        // netty server
         this.serverBootstrap = new ServerBootstrap();
         this.nettyServerConfig = nettyServerConfig;
+        // 网络连接事件的监听器
         this.channelEventListener = channelEventListener;
 
         int publicThreadNums = nettyServerConfig.getServerCallbackExecutorThreads();

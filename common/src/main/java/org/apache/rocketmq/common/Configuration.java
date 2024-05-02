@@ -54,6 +54,7 @@ public class Configuration {
         if (configObjects == null || configObjects.length == 0) {
             return;
         }
+        // 遍历注册配置信息
         for (Object configObject : configObjects) {
             registerConfig(configObject);
         }

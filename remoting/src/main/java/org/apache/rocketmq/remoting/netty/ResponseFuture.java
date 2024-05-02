@@ -25,18 +25,27 @@ import org.apache.rocketmq.remoting.common.SemaphoreReleaseOnlyOnce;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
 public class ResponseFuture {
+    // 请求id
     private final int opaque;
+    // 请求发送出去的网络连接
     private final Channel processChannel;
+    // 请求等待响应的超时时间
     private final long timeoutMillis;
+    // async异步调用响应回来以后给我一个invoke回调接口
     private final InvokeCallback invokeCallback;
     private final long beginTimestamp = System.currentTimeMillis();
     private final CountDownLatch countDownLatch = new CountDownLatch(1);
 
+    // 支持仅仅释放一次的semaphore组件的封装
     private final SemaphoreReleaseOnlyOnce once;
 
+    // 支持仅仅执行一次callback调用的CAS组件
     private final AtomicBoolean executeCallbackOnlyOnce = new AtomicBoolean(false);
+    // 发起的远程调用的请求命令
     private volatile RemotingCommand responseCommand;
+    // 请求是否发送成功
     private volatile boolean sendRequestOK = true;
+    // 这次PRC调用，如果遇到了异常
     private volatile Throwable cause;
 
     public ResponseFuture(Channel channel, int opaque, long timeoutMillis, InvokeCallback invokeCallback,
@@ -48,6 +57,7 @@ public class ResponseFuture {
         this.once = once;
     }
 
+    // 如果说响应回来了以后，执行invoke回调
     public void executeInvokeCallback() {
         if (invokeCallback != null) {
             if (this.executeCallbackOnlyOnce.compareAndSet(false, true)) {
@@ -56,12 +66,15 @@ public class ResponseFuture {
         }
     }
 
+    // 可以基于仅仅支持释放一次的semaphore做一次释放
     public void release() {
         if (this.once != null) {
             this.once.release();
         }
     }
 
+    // 当前时间 - 请求发起的开始时间，请求发起之后到现在截止的时间差，是否超过了请求超时时间
+    // 判断当前请求是否超时了
     public boolean isTimeout() {
         long diff = System.currentTimeMillis() - this.beginTimestamp;
         return diff > this.timeoutMillis;

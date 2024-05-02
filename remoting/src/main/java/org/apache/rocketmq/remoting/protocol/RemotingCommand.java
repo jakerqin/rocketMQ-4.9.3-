@@ -78,12 +78,16 @@ public class RemotingCommand {
     // 请求id
     private int opaque = requestId.getAndIncrement();
     private int flag = 0;
+    // 备注
     private String remark;
+    // 扩展字段
     private HashMap<String, String> extFields;
+    // 自定义header头
     private transient CommandCustomHeader customHeader;
 
+    // 这一RPC调用的序列化类型，默认就是json格式
     private SerializeType serializeTypeCurrentRPC = serializeTypeConfigInThisServer;
-
+    // 消息体，会把真正的消息体序列化成字节数组
     private transient byte[] body;
 
     protected RemotingCommand() {
@@ -296,6 +300,8 @@ public class RemotingCommand {
     }
 
     private Field[] getClazzFields(Class<? extends CommandCustomHeader> classHeader) {
+        // 如果说你要是自定义了一套header以后，你搞一个类，实现接口
+        // 然后在这个自定义头的类里，可以定义一堆的field，这些field就是你的自定义头
         Field[] field = CLASS_HASH_MAP.get(classHeader);
 
         if (field == null) {
@@ -364,6 +370,7 @@ public class RemotingCommand {
     }
 
     private byte[] headerEncode() {
+        // 把自定义的headers放到一个extFields里去
         this.makeCustomHeaderToNet();
         if (SerializeType.ROCKETMQ == serializeTypeCurrentRPC) {
             return RocketMQSerializable.rocketMQProtocolEncode(this);
@@ -374,11 +381,12 @@ public class RemotingCommand {
 
     public void makeCustomHeaderToNet() {
         if (this.customHeader != null) {
+            // 通过反射获取到自定义header类里面的fields
             Field[] fields = getClazzFields(customHeader.getClass());
             if (null == this.extFields) {
                 this.extFields = new HashMap<String, String>();
             }
-
+            // 对自定义header类的fields进行遍历
             for (Field field : fields) {
                 if (!Modifier.isStatic(field.getModifiers())) {
                     String name = field.getName();
@@ -390,7 +398,7 @@ public class RemotingCommand {
                         } catch (Exception e) {
                             log.error("Failed to access field [{}]", name, e);
                         }
-
+                        // 自定义的header会放到extFields里面去
                         if (value != null) {
                             this.extFields.put(name, value.toString());
                         }

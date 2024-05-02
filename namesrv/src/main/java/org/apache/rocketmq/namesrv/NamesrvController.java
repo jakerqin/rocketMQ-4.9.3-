@@ -62,7 +62,7 @@ public class NamesrvController {
 
     // houseKeeping--酒店旅游行业的术语，类似于酒店房间管理，内务管理
     // 对broker进行管理的组件
-    // nameserver跟broker之间的网络时间监听的组件
+    // nameserver跟broker之间的网络事件监听的组件
     private BrokerHousekeepingService brokerHousekeepingService;
 
     // 网络通信线程池
@@ -78,17 +78,21 @@ public class NamesrvController {
         this.kvConfigManager = new KVConfigManager(this);
         this.routeInfoManager = new RouteInfoManager();
         this.brokerHousekeepingService = new BrokerHousekeepingService(this);
+        // configuration会管理namesrv、netty相关的配置
         this.configuration = new Configuration(
             log,
             this.namesrvConfig, this.nettyServerConfig
         );
+        // 设置存储路径
         this.configuration.setStorePathFromConfig(this.namesrvConfig, "configStorePath");
     }
 
     public boolean initialize() {
-
+        // nameserver一旦启动，就会让KVConfigManager把磁盘里的数据加载到内存里来
+        // 可以往里面写入kv配置数据，它会写入内存，同步写入到磁盘里去，只不过读写锁做一个控制
+        // 读写锁的使用不太好, 刷磁盘这个动作，直接搞成读锁，草率了
         this.kvConfigManager.load();
-
+        // 初始化和创建一个基于netty的远程通信服务器
         this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.brokerHousekeepingService);
 
         this.remotingExecutor =
