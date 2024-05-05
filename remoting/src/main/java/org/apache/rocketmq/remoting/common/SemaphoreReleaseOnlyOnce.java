@@ -29,6 +29,8 @@ public class SemaphoreReleaseOnlyOnce {
 
     public void release() {
         if (this.semaphore != null) {
+            // 基于atomic实现了基于CAS的仅仅支持一次的释放
+            // cas操作，多线程并发的时候，仅仅会跑成功一次。
             if (this.released.compareAndSet(false, true)) {
                 this.semaphore.release();
             }

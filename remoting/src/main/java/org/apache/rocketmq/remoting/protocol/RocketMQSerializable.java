@@ -29,7 +29,7 @@ public class RocketMQSerializable {
     public static byte[] rocketMQProtocolEncode(RemotingCommand cmd) {
         // 用json进行序列化其实是省力做法，效率是比较差的，序列化以后的数据格式是比较占用空间的
         // 常规做法是自己对RemotingCommand协议数据对象进行编码
-
+        // 编码，对象-> 字节数组
 
         // String remark
         byte[] remarkBytes = null;
@@ -40,13 +40,14 @@ public class RocketMQSerializable {
         }
 
         // HashMap<String, String> extFields
+        // ext fields 我们自定义的header fields就在这里。把扩展头序列化为字节数组
         byte[] extFieldsBytes = null;
         int extLen = 0;
         if (cmd.getExtFields() != null && !cmd.getExtFields().isEmpty()) {
             extFieldsBytes = mapSerialize(cmd.getExtFields());
             extLen = extFieldsBytes.length;
         }
-
+        // 计算消息头总字节长度
         int totalLen = calTotalLen(remarkLen, extLen);
 
         ByteBuffer headerBuffer = ByteBuffer.allocate(totalLen);
@@ -90,14 +91,14 @@ public class RocketMQSerializable {
             Map.Entry<String, String> entry = it.next();
             if (entry.getKey() != null && entry.getValue() != null) {
                 kvLength =
-                    // keySize + Key
+                    // keySize + Key（2个字节存放的是key的长度）
                     2 + entry.getKey().getBytes(CHARSET_UTF8).length
                         // valSize + val
                         + 4 + entry.getValue().getBytes(CHARSET_UTF8).length;
                 totalLength += kvLength;
             }
         }
-
+        // 分配好内存后，再把内容放到byteBuffer里面去
         ByteBuffer content = ByteBuffer.allocate(totalLength);
         byte[] key;
         byte[] val;

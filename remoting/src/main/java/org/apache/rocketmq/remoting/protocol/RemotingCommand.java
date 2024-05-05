@@ -143,22 +143,27 @@ public class RemotingCommand {
     public static RemotingCommand createResponseCommand(int code, String remark) {
         return createResponseCommand(code, remark, null);
     }
-
+    // netty server收到字节数组
     public static RemotingCommand decode(final byte[] array) throws RemotingCommandException {
+        // 把字节数组包裹到一个ByteBuffer里去
         ByteBuffer byteBuffer = ByteBuffer.wrap(array);
         return decode(byteBuffer);
     }
 
     public static RemotingCommand decode(final ByteBuffer byteBuffer) throws RemotingCommandException {
+        // 解码的过程就是编码过程的逆向过程
+        // 拿总长度
         int length = byteBuffer.limit();
+        // 头长度
         int oriHeaderLen = byteBuffer.getInt();
         int headerLength = getHeaderLength(oriHeaderLen);
 
+        // 搞一个头长度的字节数组，一次性把headers读出来放到字节数组里
         byte[] headerData = new byte[headerLength];
         byteBuffer.get(headerData);
 
         RemotingCommand cmd = headerDecode(headerData, getProtocolType(oriHeaderLen));
-
+        // 拿到体长度
         int bodyLength = length - 4 - headerLength;
         byte[] bodyData = null;
         if (bodyLength > 0) {
@@ -220,6 +225,7 @@ public class RemotingCommand {
         byte[] result = new byte[4];
 
         result[0] = type.getCode();
+        // 大端字节序（高位在前）这样的处理常用于在网络通信中标记协议类型和数据来源等信息
         result[1] = (byte) ((source >> 16) & 0xFF);
         result[2] = (byte) ((source >> 8) & 0xFF);
         result[3] = (byte) (source & 0xFF);
@@ -305,6 +311,7 @@ public class RemotingCommand {
         Field[] field = CLASS_HASH_MAP.get(classHeader);
 
         if (field == null) {
+            // 通过反射直接获取到你自定义类的头fields拿出来
             field = classHeader.getDeclaredFields();
             synchronized (CLASS_HASH_MAP) {
                 CLASS_HASH_MAP.put(classHeader, field);
@@ -339,7 +346,7 @@ public class RemotingCommand {
         // 1> header length size
         int length = 4;
 
-        // 2> header data length
+        // 2> header data length。把完整的消息头进行编码，拿到了header字节数组
         byte[] headerData = this.headerEncode();
         length += headerData.length;
 
@@ -373,6 +380,7 @@ public class RemotingCommand {
         // 把自定义的headers放到一个extFields里去
         this.makeCustomHeaderToNet();
         if (SerializeType.ROCKETMQ == serializeTypeCurrentRPC) {
+            // 正常企业级都是走这种。如果走json的话就有点搞笑了。太占内存了
             return RocketMQSerializable.rocketMQProtocolEncode(this);
         } else {
             return RemotingSerializable.encode(this);
