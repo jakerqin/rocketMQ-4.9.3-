@@ -315,17 +315,25 @@ public abstract class NettyRemotingAbstract {
      * @param cmd response command instance.
      */
     public void processResponseCommand(ChannelHandlerContext ctx, RemotingCommand cmd) {
+        // 先从响应command里获取到请求di
         final int opaque = cmd.getOpaque();
+        // 从table中获取到请求响应的future
         final ResponseFuture responseFuture = responseTable.get(opaque);
+        // 如果是sync/async请求是有future的，如果是oneway的话，其实是没有future的，请求发出去就好了
         if (responseFuture != null) {
+            // 把responseCommand设置到responseFuture中
             responseFuture.setResponseCommand(cmd);
-
+            // 那这个请求的响应future移除掉
             responseTable.remove(opaque);
 
+            // sync的话，此时是没有invokeCallback，如果是async是有invokeCallback
+            // 异步调用请求，他是不会通过countDownLatch去等待你的响应的，所以没有必要一开始就putResponseCommand
             if (responseFuture.getInvokeCallback() != null) {
                 executeInvokeCallback(responseFuture);
             } else {
+                // 同步调用的请求，就得去调用putResponse，此时就得把countDownLatch去进行countDown这样子
                 responseFuture.putResponse(cmd);
+                // 同时还会在这里对信号量做一次释放
                 responseFuture.release();
             }
         } else {
@@ -352,6 +360,7 @@ public abstract class NettyRemotingAbstract {
                         } catch (Throwable e) {
                             log.warn("execute callback in executor exception, and callback throw", e);
                         } finally {
+                            // 如果是异步调用的话，在完成异步回调以后，就会去进行信号量的释放
                             responseFuture.release();
                         }
                     }
@@ -410,6 +419,7 @@ public abstract class NettyRemotingAbstract {
     /**
      * <p>
      * This method is periodically invoked to scan and expire deprecated request.
+     * 这个方法周期性的运行，去扫描发送出去的请求是否超时了，定时调度线程来调用它
      * </p>
      */
     public void scanResponseTable() {
@@ -419,7 +429,9 @@ public abstract class NettyRemotingAbstract {
             Entry<Integer, ResponseFuture> next = it.next();
             ResponseFuture rep = next.getValue();
 
+            // 请求发送时间 + 超时时间 <= 当前时间，当前时间已经超过了一个请求超时的时间了
             if ((rep.getBeginTimestamp() + rep.getTimeoutMillis() + 1000) <= System.currentTimeMillis()) {
+                // 信号量释放
                 rep.release();
                 it.remove();
                 rfList.add(rep);
@@ -429,6 +441,7 @@ public abstract class NettyRemotingAbstract {
 
         for (ResponseFuture rf : rfList) {
             try {
+                // 异步调用触发一个回调
                 executeInvokeCallback(rf);
             } catch (Throwable e) {
                 log.warn("scanResponseTable, operationComplete Exception", e);
