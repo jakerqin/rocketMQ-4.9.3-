@@ -89,8 +89,11 @@ public class TlsHelper {
     }
 
     public static SslContext buildSslContext(boolean forClient) throws IOException, CertificateException {
+        // 去指定的默认目录下加载tls.properties配置
         File configFile = new File(TlsSystemConfig.tlsConfigFile);
+        // 读取tls配置
         extractTlsConfigFromFile(configFile);
+        // 打印最终使用的配置
         logTheFinalUsedTlsConfig();
 
         SslProvider provider;
@@ -128,8 +131,9 @@ public class TlsHelper {
                     .build();
             }
         } else {
-
+            // 如果说启用了tls测试模式
             if (tlsTestModeEnable) {
+                // 自己签名的证书
                 SelfSignedCertificate selfSignedCertificate = new SelfSignedCertificate();
                 return SslContextBuilder
                     .forServer(selfSignedCertificate.certificate(), selfSignedCertificate.privateKey())
@@ -178,7 +182,7 @@ public class TlsHelper {
                 }
             }
         }
-
+        // 读取一大堆配置项
         tlsTestModeEnable = Boolean.parseBoolean(properties.getProperty(TLS_TEST_MODE_ENABLE, String.valueOf(tlsTestModeEnable)));
         tlsServerNeedClientAuth = properties.getProperty(TLS_SERVER_NEED_CLIENT_AUTH, tlsServerNeedClientAuth);
         tlsServerKeyPath = properties.getProperty(TLS_SERVER_KEYPATH, tlsServerKeyPath);

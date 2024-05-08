@@ -64,30 +64,47 @@ import org.apache.rocketmq.remoting.exception.RemotingTimeoutException;
 import org.apache.rocketmq.remoting.exception.RemotingTooMuchRequestException;
 import org.apache.rocketmq.remoting.protocol.RemotingCommand;
 
+/**
+ * 代表了netty网络通信服务器
+ */
 public class NettyRemotingServer extends NettyRemotingAbstract implements RemotingServer {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(RemotingHelper.ROCKETMQ_REMOTING);
+
+    // netty握手的handler
+    private static final String HANDSHAKE_HANDLER_NAME = "handshakeHandler";
+    // netty ssl加密通信handler
+    private static final String TLS_HANDLER_NAME = "sslHandler";
+    // 文件数据编码器
+    private static final String FILE_REGION_ENCODER_NAME = "fileRegionEncoder";
+
+    // netty网络服务器
     private final ServerBootstrap serverBootstrap;
+    // 对于netty server来说，必须有两个线程池，第一个是监听连接，第二个是处理每个连接读写io请求的
+    // 必须是有两个event loop group
     private final EventLoopGroup eventLoopGroupSelector;
     private final EventLoopGroup eventLoopGroupBoss;
+    // nettyServer核心配置
     private final NettyServerConfig nettyServerConfig;
 
+    // 公共使用的线程池
     private final ExecutorService publicExecutor;
+    // 网络连接事件监听器
     private final ChannelEventListener channelEventListener;
-
+    // 定时器组件
     private final Timer timer = new Timer("ServerHouseKeepingService", true);
+    // netty里面的事件处理的线程池
     private DefaultEventExecutorGroup defaultEventExecutorGroup;
 
-
+    // netty网络服务器监听的端口号
     private int port = 0;
-
-    private static final String HANDSHAKE_HANDLER_NAME = "handshakeHandler";
-    private static final String TLS_HANDLER_NAME = "sslHandler";
-    private static final String FILE_REGION_ENCODER_NAME = "fileRegionEncoder";
 
     // sharable handlers
     private HandshakeHandler handshakeHandler;
+    // 网络通信编码器
     private NettyEncoder encoder;
+    // 网络连接管理组件
     private NettyConnectManageHandler connectionManageHandler;
+    // netty 消息处理组件
     private NettyServerHandler serverHandler;
 
     public NettyRemotingServer(final NettyServerConfig nettyServerConfig) {
@@ -105,12 +122,13 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
         this.nettyServerConfig = nettyServerConfig;
         // 网络连接事件的监听器
         this.channelEventListener = channelEventListener;
-
+        // netty服务器配置里，callback处理线程数量，如果默认是0，会重置成默认四个
+        // 最终会作为公共线程池里面的线程数量
         int publicThreadNums = nettyServerConfig.getServerCallbackExecutorThreads();
         if (publicThreadNums <= 0) {
             publicThreadNums = 4;
         }
-
+        // 构建公共线程池
         this.publicExecutor = Executors.newFixedThreadPool(publicThreadNums, new ThreadFactory() {
             private AtomicInteger threadIndex = new AtomicInteger(0);
 
@@ -119,8 +137,11 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                 return new Thread(r, "NettyServerPublicExecutor_" + this.threadIndex.incrementAndGet());
             }
         });
-
+        // 如果要开启epoll，一般Linux才会用到
         if (useEpoll()) {
+            // boss event loop group。一般是负责连接监听的，一般来说他一个线程就够了
+            // 一个线程用一个selector多路复用组件，监听serverSocketChannel看是否有人发起连接请求就可以了
+            // 如果说有人发起连接就把物理的网络连接建立好，然后绑定一系列的handler pipeline
             this.eventLoopGroupBoss = new EpollEventLoopGroup(1, new ThreadFactory() {
                 private AtomicInteger threadIndex = new AtomicInteger(0);
 
@@ -129,7 +150,7 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                     return new Thread(r, String.format("NettyEPOLLBoss_%d", this.threadIndex.incrementAndGet()));
                 }
             });
-
+            // event loop group selector，这个里面会设置对应的io线程数量，默认是3个
             this.eventLoopGroupSelector = new EpollEventLoopGroup(nettyServerConfig.getServerSelectorThreads(), new ThreadFactory() {
                 private AtomicInteger threadIndex = new AtomicInteger(0);
                 private int threadTotal = nettyServerConfig.getServerSelectorThreads();
@@ -159,14 +180,17 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
                 }
             });
         }
-
+        // 加载ssl加密通信的上下文
         loadSslContext();
     }
 
     public void loadSslContext() {
+        // 先去获取默认的ssl/tls加密通信的模式
         TlsMode tlsMode = TlsSystemConfig.tlsMode;
         log.info("Server is running in TLS {} mode", tlsMode.getName());
 
+        // 默认情况下是permissive，ssl/tls加密通信是可选的，可以搞加密通信也可以不搞
+        // 只要你别手动禁用ssl/tls加密通信就可以了
         if (tlsMode != TlsMode.DISABLED) {
             try {
                 sslContext = TlsHelper.buildSslContext(false);
@@ -180,8 +204,8 @@ public class NettyRemotingServer extends NettyRemotingAbstract implements Remoti
     }
 
     private boolean useEpoll() {
-        return RemotingUtil.isLinuxPlatform()
-            && nettyServerConfig.isUseEpollNativeSelector()
+        return RemotingUtil.isLinuxPlatform()  // 必须是linux系统
+            && nettyServerConfig.isUseEpollNativeSelector() // 默认是false
             && Epoll.isAvailable();
     }
 

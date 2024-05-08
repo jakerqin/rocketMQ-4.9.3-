@@ -94,12 +94,13 @@ public class NamesrvController {
         this.kvConfigManager.load();
         // 初始化和创建一个基于netty的远程通信服务器
         this.remotingServer = new NettyRemotingServer(this.nettyServerConfig, this.brokerHousekeepingService);
-
+        // 构建一个网络通信线程池，是用的worker线程数量
         this.remotingExecutor =
             Executors.newFixedThreadPool(nettyServerConfig.getServerWorkerThreads(), new ThreadFactoryImpl("RemotingExecutorThread_"));
 
+        // 注册各种请求处理的组件
         this.registerProcessor();
-
+        // 启动定时调度的任务。第一次延迟5s，每隔10s扫描不活跃的broker
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -108,6 +109,7 @@ public class NamesrvController {
             }
         }, 5, 10, TimeUnit.SECONDS);
 
+        // 延迟1分钟，每隔10分钟打印所有的kv的配置
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -116,9 +118,13 @@ public class NamesrvController {
             }
         }, 1, 10, TimeUnit.MINUTES);
 
+        // 如果说没有禁用ssl/tls加密通信模式
         if (TlsSystemConfig.tlsMode != TlsMode.DISABLED) {
             // Register a listener to reload SslContext
             try {
+                // 搞一个文件监听的服务
+                // 核心是要去监听ssl/tls加密通信对应的证书、秘钥、信任证书路径里面的变化
+                // 如果说文件变化，会走进下面的监听器中
                 fileWatchService = new FileWatchService(
                     new String[] {
                         TlsSystemConfig.tlsServerCertPath,
@@ -131,6 +137,7 @@ public class NamesrvController {
                         public void onChanged(String path) {
                             if (path.equals(TlsSystemConfig.tlsServerTrustCertPath)) {
                                 log.info("The trust certificate changed, reload the ssl context");
+                                // 重新加载
                                 reloadServerSslContext();
                             }
                             if (path.equals(TlsSystemConfig.tlsServerCertPath)) {
@@ -158,17 +165,21 @@ public class NamesrvController {
     }
 
     private void registerProcessor() {
+        // 默认是false
         if (namesrvConfig.isClusterTest()) {
 
             this.remotingServer.registerDefaultProcessor(new ClusterTestRequestProcessor(this, namesrvConfig.getProductEnvName()),
                 this.remotingExecutor);
         } else {
-
+            // 正常走这里。
+            // 找到nettyRemotingServer注册一个默认的请求处理组件
+            // 在处理别人给我发送过来的请求的时候，是用一个默认的请求处理组件就可以了。绑定的线程池是remotingExecutor
             this.remotingServer.registerDefaultProcessor(new DefaultRequestProcessor(this), this.remotingExecutor);
         }
     }
 
     public void start() throws Exception {
+        // 网络服务器的启动
         this.remotingServer.start();
 
         if (this.fileWatchService != null) {

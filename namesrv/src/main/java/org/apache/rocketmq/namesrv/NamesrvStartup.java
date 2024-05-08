@@ -152,7 +152,7 @@ public class NamesrvStartup {
                 return null;
             }
         }));
-
+        // 对nameserver进行一个启动
         controller.start();
 
         return controller;

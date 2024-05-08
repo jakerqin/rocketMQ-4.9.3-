@@ -56,7 +56,9 @@ public class FileWatchService extends ServiceThread {
         for (int i = 0; i < watchFiles.length; i++) {
             // 文件不为空，且文件真实存在
             if (StringUtils.isNotEmpty(watchFiles[i]) && new File(watchFiles[i]).exists()) {
+                // 要监听的文件放入一个集合
                 this.watchFiles.add(watchFiles[i]);
+                // 要监听的文件内容读取出来计算hash放入一个集合
                 this.fileCurrentHash.add(hash(watchFiles[i]));
             }
         }
@@ -73,6 +75,7 @@ public class FileWatchService extends ServiceThread {
 
         while (!this.isStopped()) {
             try {
+                // 每隔500ms跑一下，都把要监听的文件内容hash重新计算一下，看看文件是否有变化
                 this.waitForRunning(WATCH_INTERVAL);
 
                 for (int i = 0; i < watchFiles.size(); i++) {
@@ -87,7 +90,7 @@ public class FileWatchService extends ServiceThread {
                     if (!newHash.equals(fileCurrentHash.get(i))) {
                         // 更新hash值
                         fileCurrentHash.set(i, newHash);
-                        // 回调监听器
+                        // hahs变动回调监听器
                         listener.onChanged(watchFiles.get(i));
                     }
                 }

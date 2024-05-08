@@ -20,23 +20,27 @@ public class NettyServerConfig implements Cloneable {
     private int listenPort = 8888;
     // 工作线程的数量
     private int serverWorkerThreads = 8;
-    // callback线程数量
+    // callback回调线程池里的线程数量，默认是0个
     private int serverCallbackExecutorThreads = 0;
-    // selector多路复用线程数量
+    // selector多路复用线程数量。连接监听的线程数量，默认3个
+    // netty网络服务器的io线程数量，默认3个线程，所有建立好的连接都会分配给3个线程，每个线程多路复用监听一批连接的读写io
     private int serverSelectorThreads = 3;
-    // 单通道信号量值
+    // oneway请求信号量默认是256个
     private int serverOnewaySemaphoreValue = 256;
-    // 异步信号量的值
+    // 异步请求信号量的值
     private int serverAsyncSemaphoreValue = 64;
-    // channel最大空闲时间
+    // channel最大空闲时间。超2分钟没有进行通信，就直接断开一个长链接
     private int serverChannelMaxIdleTimeSeconds = 120;
 
-    // socket发送消息时的buf的大小
+    // socket发送消息时的缓冲区buf的大小
     private int serverSocketSndBufSize = NettySystemConfig.socketSndbufSize;
     private int serverSocketRcvBufSize = NettySystemConfig.socketRcvbufSize;
+    // 写数据缓冲区高低水位
     private int writeBufferHighWaterMark = NettySystemConfig.writeBufferHighWaterMark;
     private int writeBufferLowWaterMark = NettySystemConfig.writeBufferLowWaterMark;
+    // tcp三次握手的accept队列的长度
     private int serverSocketBacklog = NettySystemConfig.socketBacklog;
+    // 是否开启基于内存池的内存分配策略
     private boolean serverPooledByteBufAllocatorEnable = true;
 
     /**
