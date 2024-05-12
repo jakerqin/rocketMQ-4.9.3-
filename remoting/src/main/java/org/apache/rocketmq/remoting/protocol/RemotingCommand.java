@@ -439,6 +439,7 @@ public class RemotingCommand {
         result.putInt(length);
 
         // header length
+        // 第一个字节是SerializeType.code
         result.put(markProtocolType(headerData.length, serializeTypeCurrentRPC));
 
         // header data
