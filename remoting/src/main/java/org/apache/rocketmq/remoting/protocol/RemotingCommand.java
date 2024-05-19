@@ -257,13 +257,14 @@ public class RemotingCommand {
         }
 
         if (this.extFields != null) {
-
+            // 反射拿到扩展头
             Field[] fields = getClazzFields(classHeader);
             for (Field field : fields) {
                 if (!Modifier.isStatic(field.getModifiers())) {
                     String fieldName = field.getName();
                     if (!fieldName.startsWith("this")) {
                         try {
+                            // 根据每个field name获取到扩展头里的value
                             String value = this.extFields.get(fieldName);
                             if (null == value) {
                                 if (!isFieldNullable(field)) {
@@ -272,6 +273,7 @@ public class RemotingCommand {
                                 continue;
                             }
 
+                            // 通过反射再设置到扩展头对象里去
                             field.setAccessible(true);
                             String type = getCanonicalName(field.getType());
                             Object valueParsed;

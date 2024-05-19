@@ -83,7 +83,7 @@ public class RouteInfoManager {
     }
 
     /**
-     * 返回的是完整的broker cluster 数据。cluster-》broker组-》broker机器
+     * 返回的是完整的broker cluster 数据。cluster-> broker组-> broker机器
      * @return
      */
     public byte[] getAllClusterInfo() {

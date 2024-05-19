@@ -82,14 +82,18 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
 
 
         switch (request.getCode()) {
+            // 第一类请求是对kv配置增删改查，put插入或者修改kv配置，get是查询kv配置，delete是删除kv的配置
             case RequestCode.PUT_KV_CONFIG:
                 return this.putKVConfig(ctx, request);
             case RequestCode.GET_KV_CONFIG:
                 return this.getKVConfig(ctx, request);
             case RequestCode.DELETE_KV_CONFIG:
                 return this.deleteKVConfig(ctx, request);
+
+            // 第二类：查询数据版本号，查询broker topic config，routeInfoManager组件来去处理的
             case RequestCode.QUERY_DATA_VERSION:
                 return queryBrokerTopicConfig(ctx, request);
+            // 注册broker、下线broker
             case RequestCode.REGISTER_BROKER:
                 Version brokerVersion = MQVersion.value2Version(request.getVersion());
                 if (brokerVersion.ordinal() >= MQVersion.Version.V3_0_11.ordinal()) {
@@ -99,12 +103,18 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
                 }
             case RequestCode.UNREGISTER_BROKER:
                 return this.unregisterBroker(ctx, request);
+            // 根据topic获取路由信息
             case RequestCode.GET_ROUTEINFO_BY_TOPIC:
                 return this.getRouteInfoByTopic(ctx, request);
-            case RequestCode.GET_BROKER_CLUSTER_INFO:
+            // 获取broker集群信息
+            case RequestCode.GET_BROKER_CLUSTER_INFO: // 创建topic的时候，知道这个topic要分配多少个queue
+                // 通过nameserver查询到集群里broker情况，然后跟各个broker组分配一些队列，直接跟各个broker组进行通信，告诉他们你要负责管理这个topic的一部分的queue这样子
+                // broker内部对topic的queues元数据就会更新
                 return this.getBrokerClusterInfo(ctx, request);
+            // 清理掉broker写权限
             case RequestCode.WIPE_WRITE_PERM_OF_BROKER:
                 return this.wipeWritePermOfBroker(ctx, request);
+            // 增加broker写权限
             case RequestCode.ADD_WRITE_PERM_OF_BROKER:
                 return this.addWritePermOfBroker(ctx, request);
             case RequestCode.GET_ALL_TOPIC_LIST_FROM_NAMESERVER:
@@ -123,6 +133,8 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
                 return this.getHasUnitSubTopicList(ctx, request);
             case RequestCode.GET_HAS_UNIT_SUB_UNUNIT_TOPIC_LIST:
                 return this.getHasUnitSubUnUnitTopicList(ctx, request);
+
+            // 第三类：对nameserver自己本身的一些配置去做一些热更新，由configuration组件来处理的
             case RequestCode.UPDATE_NAMESRV_CONFIG:
                 return this.updateConfig(ctx, request);
             case RequestCode.GET_NAMESRV_CONFIG:
@@ -141,6 +153,7 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
     public RemotingCommand putKVConfig(ChannelHandlerContext ctx,
         RemotingCommand request) throws RemotingCommandException {
         final RemotingCommand response = RemotingCommand.createResponseCommand(null);
+        // 通过扩展头读取到kv配置的namespace、key、value
         final PutKVConfigRequestHeader requestHeader =
             (PutKVConfigRequestHeader) request.decodeCommandCustomHeader(PutKVConfigRequestHeader.class);
 
@@ -149,6 +162,7 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
             response.setRemark("namespace or key is null");
             return response;
         }
+        // kv配置管理组件，写入内容，同步写入到磁盘里去
         this.namesrvController.getKvConfigManager().putKVConfig(
             requestHeader.getNamespace(),
             requestHeader.getKey(),
@@ -266,6 +280,7 @@ public class DefaultRequestProcessor extends AsyncNettyRequestProcessor implemen
         final QueryDataVersionResponseHeader responseHeader = (QueryDataVersionResponseHeader) response.readCustomHeader();
         final QueryDataVersionRequestHeader requestHeader =
             (QueryDataVersionRequestHeader) request.decodeCommandCustomHeader(QueryDataVersionRequestHeader.class);
+        // broker可以上报topic元数据的数据版本号过来做一个查询
         DataVersion dataVersion = DataVersion.decode(request.getBody(), DataVersion.class);
 
         Boolean changed = this.namesrvController.getRouteInfoManager().isBrokerTopicConfigChanged(requestHeader.getBrokerAddr(), dataVersion);
